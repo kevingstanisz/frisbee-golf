@@ -1,65 +1,87 @@
-import Image from "next/image";
+import { supabase } from '@/lib/supabase'
+import Link from 'next/link'
 
-export default function Home() {
+export const revalidate = 0
+
+export default async function HomePage() {
+  const [{ data: players }, { data: scores }] = await Promise.all([
+    supabase.from('players').select('id, name'),
+    supabase
+      .from('scores')
+      .select('player_id, strokes, rounds(course_config_id)'),
+  ])
+
+  // Compute fractional record points per player per course config
+  const configScores: Record<string, { playerId: string; strokes: number }[]> = {}
+  for (const score of scores ?? []) {
+    const configId = (score.rounds as unknown as { course_config_id: string } | null)?.course_config_id
+    if (!configId) continue
+    if (!configScores[configId]) configScores[configId] = []
+    configScores[configId].push({ playerId: score.player_id, strokes: score.strokes })
+  }
+
+  const recordPoints: Record<string, number> = {}
+  for (const entries of Object.values(configScores)) {
+    const min = Math.min(...entries.map((e) => e.strokes))
+    const holders = entries.filter((e) => e.strokes === min)
+    const share = 1 / holders.length
+    for (const h of holders) {
+      recordPoints[h.playerId] = (recordPoints[h.playerId] ?? 0) + share
+    }
+  }
+
+  const playerMap = Object.fromEntries((players ?? []).map((p) => [p.id, p.name]))
+  const leaderboard = Object.entries(recordPoints)
+    .map(([playerId, points]) => ({ playerId, points, name: playerMap[playerId] ?? 'Unknown' }))
+    .sort((a, b) => b.points - a.points)
+
+  const totalRecords = Object.keys(configScores).length
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <main className="max-w-2xl mx-auto px-4 py-8">
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="font-display text-4xl">Frisbee Golf</h1>
+        <Link href="/rounds/new" className="btn-primary">+ Enter Round</Link>
+      </div>
+
+      <div className="card">
+        <div className="flex items-baseline justify-between mb-4">
+          <h2 className="font-display text-2xl">Records Leaderboard</h2>
+          {totalRecords > 0 && (
+            <span style={{ color: 'rgba(240,237,232,0.4)', fontSize: '0.85rem' }}>
+              {totalRecords} course config{totalRecords !== 1 ? 's' : ''} played
+            </span>
+          )}
+        </div>
+
+        {leaderboard.length === 0 ? (
+          <p style={{ color: 'rgba(240,237,232,0.5)' }}>
+            No rounds yet.{' '}
+            <Link href="/rounds/new" style={{ color: 'var(--accent)' }}>Enter the first one.</Link>
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ color: 'rgba(240,237,232,0.4)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                <th style={{ textAlign: 'left', paddingBottom: '0.75rem', width: '2.5rem' }}>#</th>
+                <th style={{ textAlign: 'left', paddingBottom: '0.75rem' }}>Player</th>
+                <th style={{ textAlign: 'right', paddingBottom: '0.75rem' }}>Records</th>
+              </tr>
+            </thead>
+            <tbody>
+              {leaderboard.map((entry, i) => (
+                <tr key={entry.playerId} style={{ borderTop: '1px solid var(--net)' }}>
+                  <td style={{ padding: '0.875rem 0', color: 'rgba(240,237,232,0.4)' }}>{i + 1}</td>
+                  <td style={{ padding: '0.875rem 0', fontWeight: i === 0 ? 600 : 400 }}>{entry.name}</td>
+                  <td style={{ padding: '0.875rem 0', textAlign: 'right', color: 'var(--gold)', fontWeight: 600, fontSize: '1.1rem' }}>
+                    {Number.isInteger(entry.points) ? entry.points : entry.points.toFixed(1)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </main>
+  )
 }
