@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import EstablishedToggle from './EstablishedToggle'
 
 export const revalidate = 0
 
@@ -11,7 +12,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
 
   const { data: course } = await supabase
     .from('courses')
-    .select('*, course_configs(id, name, created_at)')
+    .select('*, established, course_configs(id, name, created_at)')
     .eq('id', id)
     .single()
 
@@ -22,12 +23,12 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
 
   const { data: allScores } = await supabase
     .from('scores')
-    .select('player_id, strokes, players(name), rounds(course_config_id, played_at)')
+    .select('player_id, strokes, players(name), rounds(course_config_id, played_at, historical)')
     .in('rounds.course_config_id', configIds.length > 0 ? configIds : ['none'])
 
-  const scoresByConfig: Record<string, { playerName: string; score: number; playedAt: string }[]> = {}
+  const scoresByConfig: Record<string, { playerName: string; score: number; playedAt: string; historical: boolean }[]> = {}
   for (const score of allScores ?? []) {
-    const round = score.rounds as unknown as { course_config_id: string; played_at: string } | null
+    const round = score.rounds as unknown as { course_config_id: string; played_at: string; historical: boolean } | null
     if (!round) continue
     const cid = round.course_config_id
     if (!scoresByConfig[cid]) scoresByConfig[cid] = []
@@ -35,6 +36,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
       playerName: (score.players as unknown as { name: string } | null)?.name ?? 'Unknown',
       score: score.strokes,
       playedAt: round.played_at,
+      historical: round.historical ?? false,
     })
   }
 
@@ -86,6 +88,11 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
                             <td style={{ padding: '0.75rem 0', fontWeight: isRecord ? 600 : 400 }}>
                               {isRecord && <span style={{ color: 'var(--gold)', marginRight: '0.4rem' }}>★</span>}
                               {entry.playerName}
+                              {entry.historical && (
+                                <span style={{ marginLeft: '0.4rem', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.06em', color: 'rgba(240,237,232,0.35)', border: '1px solid rgba(240,237,232,0.2)', borderRadius: '3px', padding: '0.05rem 0.3rem', verticalAlign: 'middle' }}>
+                                  OG
+                                </span>
+                              )}
                             </td>
                             <td style={{ padding: '0.75rem 0', textAlign: 'right', fontWeight: isRecord ? 700 : 500, color: isRecord ? 'var(--gold)' : scoreColor }}>
                               {fmt(entry.score)}
@@ -108,6 +115,8 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
       <div style={{ marginTop: '2rem', textAlign: 'center' }}>
         <Link href="/rounds/new" className="btn-primary">+ Enter Round</Link>
       </div>
+
+      <EstablishedToggle courseId={course.id} established={course.established ?? false} />
     </main>
   )
 }

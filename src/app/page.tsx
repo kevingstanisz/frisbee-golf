@@ -4,18 +4,46 @@ import Link from 'next/link'
 export const revalidate = 0
 
 export default async function HomePage() {
-  const [{ data: players }, { data: scores }] = await Promise.all([
+  const [{ data: players }, { data: scores }, { data: courses }] = await Promise.all([
     supabase.from('players').select('id, name'),
-    supabase
-      .from('scores')
-      .select('player_id, strokes, rounds(course_config_id)'),
+    supabase.from('scores').select('player_id, strokes, rounds(course_config_id)'),
+    supabase.from('courses').select('id, established, course_configs(id)'),
   ])
 
-  // Compute fractional record points per player per course config
+  // Build configId → courseId map from courses data
+  const configToCourse: Record<string, string> = {}
+  for (const c of courses ?? []) {
+    for (const cfg of (c.course_configs as { id: string }[]) ?? []) {
+      configToCourse[cfg.id] = c.id
+    }
+  }
+
+  // Count unique players and total scores per course (for auto-established logic)
+  const playersByCourse: Record<string, Set<string>> = {}
+  const scoreCountByCourse: Record<string, number> = {}
+  for (const score of scores ?? []) {
+    const configId = (score.rounds as unknown as { course_config_id: string } | null)?.course_config_id
+    if (!configId) continue
+    const courseId = configToCourse[configId]
+    if (!courseId) continue
+    if (!playersByCourse[courseId]) playersByCourse[courseId] = new Set()
+    playersByCourse[courseId].add(score.player_id)
+    scoreCountByCourse[courseId] = (scoreCountByCourse[courseId] ?? 0) + 1
+  }
+
+  const establishedCourseIds = new Set(
+    (courses ?? [])
+      .filter((c) => c.established || ((playersByCourse[c.id]?.size ?? 0) >= 3 && (scoreCountByCourse[c.id] ?? 0) >= 5))
+      .map((c) => c.id)
+  )
+
+  // Compute fractional record points per player per course config (established courses only)
   const configScores: Record<string, { playerId: string; strokes: number }[]> = {}
   for (const score of scores ?? []) {
     const configId = (score.rounds as unknown as { course_config_id: string } | null)?.course_config_id
     if (!configId) continue
+    const courseId = configToCourse[configId]
+    if (!courseId || !establishedCourseIds.has(courseId)) continue
     if (!configScores[configId]) configScores[configId] = []
     configScores[configId].push({ playerId: score.player_id, strokes: score.strokes })
   }
@@ -56,8 +84,7 @@ export default async function HomePage() {
 
         {leaderboard.length === 0 ? (
           <p style={{ color: 'rgba(240,237,232,0.5)' }}>
-            No rounds yet.{' '}
-            <Link href="/rounds/new" style={{ color: 'var(--accent)' }}>Enter the first one.</Link>
+            No established courses yet. Visit a course page to mark it as Established.
           </p>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>

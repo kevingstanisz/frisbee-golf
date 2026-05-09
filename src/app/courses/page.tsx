@@ -11,6 +11,8 @@ type CourseData = {
   holes: number
   configCount: number
   roundCount: number
+  uniquePlayers: number
+  established: boolean
   topScores: ScoreEntry[]
 }
 
@@ -25,7 +27,7 @@ export default function CoursesPage() {
     async function load() {
       const { data: coursesRaw } = await supabase
         .from('courses')
-        .select('id, name, holes, course_configs(id, name)')
+        .select('id, name, holes, established, course_configs(id, name)')
         .order('name')
 
       if (!coursesRaw) { setLoading(false); return }
@@ -34,7 +36,7 @@ export default function CoursesPage() {
 
       const { data: scores } = await supabase
         .from('scores')
-        .select('strokes, players(name), rounds(course_config_id)')
+        .select('player_id, strokes, players(name), rounds(course_config_id)')
         .in('rounds.course_config_id', allConfigIds.length ? allConfigIds : ['none'])
 
       // Build a map: configId → { courseName, configName }
@@ -47,7 +49,7 @@ export default function CoursesPage() {
 
       // Group scores by course
       const byCourse: Record<string, ScoreEntry[]> = {}
-      const roundsByCourse: Record<string, Set<string>> = {}
+      const playersByCourse: Record<string, Set<string>> = {}
 
       for (const score of scores ?? []) {
         const round = score.rounds as unknown as { course_config_id: string } | null
@@ -56,7 +58,8 @@ export default function CoursesPage() {
         if (!meta) continue
         const cid = meta.courseId
         if (!byCourse[cid]) byCourse[cid] = []
-        if (!roundsByCourse[cid]) roundsByCourse[cid] = new Set()
+        if (!playersByCourse[cid]) playersByCourse[cid] = new Set()
+        playersByCourse[cid].add(score.player_id)
         byCourse[cid].push({
           playerName: (score.players as unknown as { name: string } | null)?.name ?? 'Unknown',
           score: score.strokes,
@@ -65,17 +68,23 @@ export default function CoursesPage() {
       }
 
       const result: CourseData[] = (coursesRaw as any[]).map((c) => {
-        const scores = byCourse[c.id] ?? []
-        const sorted = [...scores].sort((a, b) => a.score - b.score)
+        const entries = byCourse[c.id] ?? []
+        const sorted = [...entries].sort((a, b) => a.score - b.score)
+        const uniquePlayers = playersByCourse[c.id]?.size ?? 0
+        const autoEstablished = uniquePlayers >= 3 && entries.length >= 5
         return {
           id: c.id,
           name: c.name,
           holes: c.holes,
           configCount: c.course_configs.length,
-          roundCount: scores.length,
+          roundCount: entries.length,
+          uniquePlayers,
+          established: c.established || autoEstablished,
           topScores: sorted.slice(0, 5),
         }
       })
+
+      result.sort((a, b) => b.roundCount - a.roundCount)
 
       setCourses(result)
       setLoading(false)
@@ -115,7 +124,14 @@ export default function CoursesPage() {
                   }}
                 >
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: '1rem', marginBottom: '0.2rem' }}>{course.name}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem' }}>
+                      <span style={{ fontWeight: 600, fontSize: '1rem' }}>{course.name}</span>
+                      {course.established && (
+                        <span style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--gold)', border: '1px solid var(--gold)', borderRadius: '3px', padding: '0.05rem 0.35rem', opacity: 0.85 }}>
+                          Established
+                        </span>
+                      )}
+                    </div>
                     <div style={{ color: 'rgba(240,237,232,0.45)', fontSize: '0.8rem' }}>
                       {course.holes} holes · {course.configCount} config{course.configCount !== 1 ? 's' : ''} · {course.roundCount} round{course.roundCount !== 1 ? 's' : ''}
                     </div>

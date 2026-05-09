@@ -45,6 +45,17 @@ export async function createCourseConfig(courseId: string, name: string) {
   return data
 }
 
+export async function toggleEstablished(courseId: string, value: boolean) {
+  const { error } = await supabase
+    .from('courses')
+    .update({ established: value })
+    .eq('id', courseId)
+  if (error) throw new Error(error.message)
+  revalidatePath('/courses')
+  revalidatePath(`/courses/${courseId}`)
+  revalidatePath('/')
+}
+
 export async function createRound(
   courseConfigId: string,
   scores: { playerId: string; strokes: number; playerName: string }[],
