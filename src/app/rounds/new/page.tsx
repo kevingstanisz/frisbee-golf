@@ -6,52 +6,35 @@ import { supabase } from '@/lib/supabase'
 import { createRound, createPlayer, createCourseConfig } from '@/app/actions'
 import { Course, Player, CourseConfig } from '@/lib/types'
 
-type PlayerScore = { player: Player; strokes: number }
+type PlayerScore = { player: Player; score: number }
 
-function fmtRelative(strokes: number, par: number) {
-  const d = strokes - par
-  return d === 0 ? 'E' : d > 0 ? `+${d}` : `${d}`
-}
+const fmt = (n: number) => (n === 0 ? 'E' : n > 0 ? `+${n}` : `${n}`)
 
-function ScoreStepper({ strokes, par, onChange }: { strokes: number; par: number; onChange: (n: number) => void }) {
-  const delta = strokes - par
-  const color = delta < 0 ? '#4ade80' : delta > 0 ? 'var(--accent)' : 'var(--chalk)'
+function ScoreStepper({ score, onChange }: { score: number; onChange: (n: number) => void }) {
+  const color = score < 0 ? '#4ade80' : score > 0 ? 'var(--accent)' : 'var(--chalk)'
 
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault()
-    onChange(strokes + (e.deltaY > 0 ? 1 : -1))
+    onChange(score + (e.deltaY > 0 ? 1 : -1))
   }
 
   return (
-    <div onWheel={handleWheel} style={{ display: 'flex', alignItems: 'center', gap: '0rem', userSelect: 'none' }}>
-      <button
-        type="button"
-        onClick={() => onChange(strokes - 1)}
-        style={{
-          width: '2.5rem', height: '2.5rem', borderRadius: '50%',
-          border: '1px solid var(--net)', background: 'rgba(255,255,255,0.04)',
-          color: 'var(--chalk)', fontSize: '1.25rem', cursor: 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}
-      >−</button>
-      <div style={{ width: '5rem', textAlign: 'center' }}>
-        <div style={{ fontSize: '1.5rem', fontWeight: 700, color, lineHeight: 1 }}>
-          {fmtRelative(strokes, par)}
-        </div>
-        <div style={{ fontSize: '0.7rem', color: 'rgba(240,237,232,0.4)', marginTop: '0.15rem' }}>
-          {strokes} strokes
-        </div>
+    <div onWheel={handleWheel} style={{ display: 'flex', alignItems: 'center', userSelect: 'none' }}>
+      <button type="button" onClick={() => onChange(score - 1)} style={{
+        width: '2.5rem', height: '2.5rem', borderRadius: '50%',
+        border: '1px solid var(--net)', background: 'rgba(255,255,255,0.04)',
+        color: 'var(--chalk)', fontSize: '1.25rem', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>−</button>
+      <div style={{ width: '4.5rem', textAlign: 'center' }}>
+        <div style={{ fontSize: '1.5rem', fontWeight: 700, color, lineHeight: 1 }}>{fmt(score)}</div>
       </div>
-      <button
-        type="button"
-        onClick={() => onChange(strokes + 1)}
-        style={{
-          width: '2.5rem', height: '2.5rem', borderRadius: '50%',
-          border: '1px solid var(--net)', background: 'rgba(255,255,255,0.04)',
-          color: 'var(--chalk)', fontSize: '1.25rem', cursor: 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}
-      >+</button>
+      <button type="button" onClick={() => onChange(score + 1)} style={{
+        width: '2.5rem', height: '2.5rem', borderRadius: '50%',
+        border: '1px solid var(--net)', background: 'rgba(255,255,255,0.04)',
+        color: 'var(--chalk)', fontSize: '1.25rem', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>+</button>
     </div>
   )
 }
@@ -64,7 +47,6 @@ export default function NewRoundPage() {
   const [configs, setConfigs] = useState<CourseConfig[]>([])
   const [selectedConfig, setSelectedConfig] = useState<CourseConfig | null>(null)
   const [newConfigName, setNewConfigName] = useState('')
-  const [newConfigPar, setNewConfigPar] = useState('54')
   const [addingConfig, setAddingConfig] = useState(false)
   const [playerScores, setPlayerScores] = useState<PlayerScore[]>([])
   const [newPlayerName, setNewPlayerName] = useState('')
@@ -74,7 +56,7 @@ export default function NewRoundPage() {
 
   useEffect(() => {
     Promise.all([
-      supabase.from('courses').select('*, course_configs(id, name, par)').order('name'),
+      supabase.from('courses').select('*, course_configs(id, name)').order('name'),
       supabase.from('players').select('*').order('name'),
     ]).then(([{ data: c }, { data: p }]) => {
       setCourses(c ?? [])
@@ -88,23 +70,14 @@ export default function NewRoundPage() {
     setSelectedConfig(null)
   }
 
-  const selectConfig = (config: CourseConfig) => {
-    setSelectedConfig(config)
-    // Reset player scores to par when config changes
-    setPlayerScores((prev) =>
-      prev.map((ps) => ({ ...ps, strokes: config.par ?? ps.strokes }))
-    )
-  }
-
   const handleAddConfig = async () => {
     if (!newConfigName.trim() || !selectedCourse) return
     setAddingConfig(true)
     try {
-      const config = await createCourseConfig(selectedCourse.id, newConfigName, Number(newConfigPar) || 54)
+      const config = await createCourseConfig(selectedCourse.id, newConfigName)
       setConfigs((prev) => [...prev, config])
-      selectConfig(config)
+      setSelectedConfig(config)
       setNewConfigName('')
-      setNewConfigPar('54')
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -115,15 +88,11 @@ export default function NewRoundPage() {
   const togglePlayer = (player: Player) => {
     setPlayerScores((prev) => {
       const exists = prev.find((ps) => ps.player.id === player.id)
-      if (exists) return prev.filter((ps) => ps.player.id !== player.id)
-      return [...prev, { player, strokes: selectedConfig?.par ?? 54 }]
+      return exists
+        ? prev.filter((ps) => ps.player.id !== player.id)
+        : [...prev, { player, score: 0 }]
     })
   }
-
-  const setStrokes = (playerId: string, strokes: number) =>
-    setPlayerScores((prev) =>
-      prev.map((ps) => ps.player.id === playerId ? { ...ps, strokes } : ps)
-    )
 
   const handleAddPlayer = async () => {
     if (!newPlayerName.trim()) return
@@ -131,7 +100,7 @@ export default function NewRoundPage() {
     try {
       const player = await createPlayer(newPlayerName)
       setPlayers((prev) => [...prev, player].sort((a, b) => a.name.localeCompare(b.name)))
-      setPlayerScores((prev) => [...prev, { player, strokes: selectedConfig?.par ?? 54 }])
+      setPlayerScores((prev) => [...prev, { player, score: 0 }])
       setNewPlayerName('')
     } catch (e: any) {
       setError(e.message)
@@ -149,10 +118,9 @@ export default function NewRoundPage() {
     try {
       await createRound(
         selectedConfig.id,
-        playerScores.map((ps) => ({ playerId: ps.player.id, strokes: ps.strokes, playerName: ps.player.name })),
+        playerScores.map((ps) => ({ playerId: ps.player.id, strokes: ps.score, playerName: ps.player.name })),
         selectedCourse.name,
-        selectedConfig.name,
-        selectedConfig.par
+        selectedConfig.name
       )
       router.push('/')
     } catch (e: any) {
@@ -182,7 +150,6 @@ export default function NewRoundPage() {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
 
-        {/* Course */}
         <div>
           <label style={labelStyle}>Course</label>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
@@ -198,33 +165,23 @@ export default function NewRoundPage() {
           </div>
         </div>
 
-        {/* Config */}
         {selectedCourse && (
           <div>
             <label style={labelStyle}>Configuration</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.75rem' }}>
               {configs.map((config) => (
-                <button key={config.id} type="button" onClick={() => selectConfig(config)}
+                <button key={config.id} type="button"
+                  onClick={() => setSelectedConfig(selectedConfig?.id === config.id ? null : config)}
                   style={optionBtn(selectedConfig?.id === config.id)}>
                   {config.name}
-                  {config.par != null && (
-                    <span style={{ color: 'rgba(240,237,232,0.4)', fontSize: '0.8rem', marginLeft: '0.5rem' }}>
-                      par {config.par}
-                    </span>
-                  )}
                 </button>
               ))}
             </div>
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
               <input type="text" value={newConfigName}
                 onChange={(e) => setNewConfigName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddConfig())}
                 placeholder="New config…" style={{ flex: 1 }} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
-                <span style={{ fontSize: '0.8rem', color: 'rgba(240,237,232,0.4)' }}>Par</span>
-                <input type="text" value={newConfigPar} onChange={(e) => setNewConfigPar(e.target.value)}
-                  style={{ width: '3.5rem', textAlign: 'center' }} />
-              </div>
               <button type="button" onClick={handleAddConfig}
                 disabled={addingConfig || !newConfigName.trim()} className="btn-ghost">
                 Add
@@ -233,7 +190,6 @@ export default function NewRoundPage() {
           </div>
         )}
 
-        {/* Players */}
         {selectedConfig && (
           <div>
             <label style={labelStyle}>Players</label>
@@ -257,19 +213,18 @@ export default function NewRoundPage() {
           </div>
         )}
 
-        {/* Score steppers */}
-        {playerScores.length > 0 && selectedConfig?.par != null && (
+        {playerScores.length > 0 && (
           <div>
-            <label style={labelStyle}>Scores — par {selectedConfig.par}</label>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <label style={labelStyle}>Scores</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {playerScores.map((ps) => (
-                <div key={ps.player.id} className="card" style={{ padding: '0.875rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div key={ps.player.id} className="card"
+                  style={{ padding: '0.875rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span style={{ fontWeight: 500 }}>{ps.player.name}</span>
-                  <ScoreStepper
-                    strokes={ps.strokes}
-                    par={selectedConfig.par!}
-                    onChange={(n) => setStrokes(ps.player.id, Math.max(1, n))}
-                  />
+                  <ScoreStepper score={ps.score}
+                    onChange={(n) => setPlayerScores((prev) =>
+                      prev.map((p) => p.player.id === ps.player.id ? { ...p, score: n } : p)
+                    )} />
                 </div>
               ))}
             </div>
