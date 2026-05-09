@@ -1,7 +1,7 @@
 DO $$
 DECLARE
   p_dan    uuid; p_frank  uuid; p_kevin  uuid;
-  p_zack   uuid; p_david  uuid;
+  p_zack   uuid; p_david  uuid; p_dave   uuid;
 
   c_woodridge uuid; c_kress     uuid; c_oaks      uuid;
   c_nap       uuid; c_piltcher  uuid; c_canyons   uuid;
@@ -31,6 +31,7 @@ BEGIN
   INSERT INTO players (name) VALUES ('Kevin') RETURNING id INTO p_kevin;
   INSERT INTO players (name) VALUES ('Zack')  RETURNING id INTO p_zack;
   INSERT INTO players (name) VALUES ('David') RETURNING id INTO p_david;
+  INSERT INTO players (name) VALUES ('Dave')  RETURNING id INTO p_dave;
 
   -- Courses
   INSERT INTO courses (name, holes) VALUES ('Woodridge', 18)           RETURNING id INTO c_woodridge;
@@ -65,7 +66,7 @@ BEGIN
   -- Woodridge Standard
   INSERT INTO rounds (course_config_id, historical) VALUES (cfg_woodridge, true) RETURNING id INTO r;
   INSERT INTO scores (round_id, player_id, strokes) VALUES
-    (r, p_dan, -7), (r, p_frank, -6), (r, p_kevin, -4), (r, p_zack, -2);
+    (r, p_dan, -7), (r, p_frank, -6), (r, p_kevin, -7), (r, p_zack, -2);
 
   -- Kress Creek A
   INSERT INTO rounds (course_config_id, historical) VALUES (cfg_kress, true) RETURNING id INTO r;
@@ -75,7 +76,7 @@ BEGIN
   -- Oaks White
   INSERT INTO rounds (course_config_id, historical) VALUES (cfg_oaks, true) RETURNING id INTO r;
   INSERT INTO scores (round_id, player_id, strokes) VALUES
-    (r, p_dan, 0), (r, p_frank, 1), (r, p_kevin, 2), (r, p_zack, 7);
+    (r, p_dan, 0), (r, p_frank, 1), (r, p_kevin, 2), (r, p_zack, 3), (r, p_dave, 3);
 
   -- Naperville B White
   INSERT INTO rounds (course_config_id, historical) VALUES (cfg_nap_b, true) RETURNING id INTO r;
@@ -100,7 +101,7 @@ BEGIN
   -- Maryknoll Park - Glen Ellyn all par 3s
   INSERT INTO rounds (course_config_id, historical) VALUES (cfg_maryknoll, true) RETURNING id INTO r;
   INSERT INTO scores (round_id, player_id, strokes) VALUES
-    (r, p_kevin, -3), (r, p_frank, -2), (r, p_zack, 0), (r, p_david, 4);
+    (r, p_kevin, -3), (r, p_frank, -2), (r, p_zack, 0), (r, p_dave, 4);
 
   -- Rotary Park - White numbers
   INSERT INTO rounds (course_config_id, historical) VALUES (cfg_rotary, true) RETURNING id INTO r;
@@ -125,11 +126,11 @@ BEGIN
   -- Katherine Legge - Hinsdale numbers
   INSERT INTO rounds (course_config_id, historical) VALUES (cfg_katherine, true) RETURNING id INTO r;
   INSERT INTO scores (round_id, player_id, strokes) VALUES
-    (r, p_zack, -7), (r, p_david, -6);
+    (r, p_zack, -7), (r, p_dave, -6);
 
   -- Madison Meadow Park - UDisc Scoring
   INSERT INTO rounds (course_config_id, historical) VALUES (cfg_madison, true) RETURNING id INTO r;
   INSERT INTO scores (round_id, player_id, strokes) VALUES
-    (r, p_zack, 0), (r, p_kevin, 0), (r, p_david, -1);
+    (r, p_zack, 0), (r, p_kevin, 0), (r, p_dave, -1);
 
 END $$;
