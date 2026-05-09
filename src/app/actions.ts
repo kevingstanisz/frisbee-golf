@@ -69,7 +69,7 @@ export async function createRound(
     .map((s) => `${s.playerName} ${fmt(s.strokes)}`)
     .join(', ')
 
-  await sendNotification('Frisbee Golf ⛳', `${courseName} — ${configName}: ${scoreStr}`)
+  await sendNotification('Frisbee Golf', `${courseName} — ${configName}: ${scoreStr}`)
 
   revalidatePath('/')
   return round
