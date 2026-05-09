@@ -13,6 +13,7 @@ export type CourseConfig = {
   id: string
   course_id: string
   name: string
+  par: number | null
   created_at: string
 }
 

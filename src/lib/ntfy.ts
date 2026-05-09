@@ -6,7 +6,7 @@ export async function sendNotification(title: string, message: string) {
   }
 
   try {
-    await fetch(`https://ntfy.sh/${topic}`, {
+    const res = await fetch(`https://ntfy.sh/${topic}`, {
       method: 'POST',
       headers: {
         'Title': title,
@@ -15,6 +15,7 @@ export async function sendNotification(title: string, message: string) {
       },
       body: message,
     })
+    if (!res.ok) console.error('ntfy error:', res.status, await res.text())
   } catch (err) {
     console.error('ntfy error:', err)
   }

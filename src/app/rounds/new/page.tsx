@@ -6,17 +6,65 @@ import { supabase } from '@/lib/supabase'
 import { createRound, createPlayer, createCourseConfig } from '@/app/actions'
 import { Course, Player, CourseConfig } from '@/lib/types'
 
-type PlayerScore = { player: Player; strokes: string }
+type PlayerScore = { player: Player; strokes: number }
+
+function fmtRelative(strokes: number, par: number) {
+  const d = strokes - par
+  return d === 0 ? 'E' : d > 0 ? `+${d}` : `${d}`
+}
+
+function ScoreStepper({ strokes, par, onChange }: { strokes: number; par: number; onChange: (n: number) => void }) {
+  const delta = strokes - par
+  const color = delta < 0 ? '#4ade80' : delta > 0 ? 'var(--accent)' : 'var(--chalk)'
+
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault()
+    onChange(strokes + (e.deltaY > 0 ? 1 : -1))
+  }
+
+  return (
+    <div onWheel={handleWheel} style={{ display: 'flex', alignItems: 'center', gap: '0rem', userSelect: 'none' }}>
+      <button
+        type="button"
+        onClick={() => onChange(strokes - 1)}
+        style={{
+          width: '2.5rem', height: '2.5rem', borderRadius: '50%',
+          border: '1px solid var(--net)', background: 'rgba(255,255,255,0.04)',
+          color: 'var(--chalk)', fontSize: '1.25rem', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}
+      >−</button>
+      <div style={{ width: '5rem', textAlign: 'center' }}>
+        <div style={{ fontSize: '1.5rem', fontWeight: 700, color, lineHeight: 1 }}>
+          {fmtRelative(strokes, par)}
+        </div>
+        <div style={{ fontSize: '0.7rem', color: 'rgba(240,237,232,0.4)', marginTop: '0.15rem' }}>
+          {strokes} strokes
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={() => onChange(strokes + 1)}
+        style={{
+          width: '2.5rem', height: '2.5rem', borderRadius: '50%',
+          border: '1px solid var(--net)', background: 'rgba(255,255,255,0.04)',
+          color: 'var(--chalk)', fontSize: '1.25rem', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}
+      >+</button>
+    </div>
+  )
+}
 
 export default function NewRoundPage() {
   const router = useRouter()
-
   const [courses, setCourses] = useState<Course[]>([])
   const [players, setPlayers] = useState<Player[]>([])
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null)
   const [configs, setConfigs] = useState<CourseConfig[]>([])
   const [selectedConfig, setSelectedConfig] = useState<CourseConfig | null>(null)
   const [newConfigName, setNewConfigName] = useState('')
+  const [newConfigPar, setNewConfigPar] = useState('54')
   const [addingConfig, setAddingConfig] = useState(false)
   const [playerScores, setPlayerScores] = useState<PlayerScore[]>([])
   const [newPlayerName, setNewPlayerName] = useState('')
@@ -26,7 +74,7 @@ export default function NewRoundPage() {
 
   useEffect(() => {
     Promise.all([
-      supabase.from('courses').select('*, course_configs(id, name)').order('name'),
+      supabase.from('courses').select('*, course_configs(id, name, par)').order('name'),
       supabase.from('players').select('*').order('name'),
     ]).then(([{ data: c }, { data: p }]) => {
       setCourses(c ?? [])
@@ -38,18 +86,25 @@ export default function NewRoundPage() {
     setSelectedCourse(course)
     setConfigs((course.course_configs as CourseConfig[]) ?? [])
     setSelectedConfig(null)
-    setNewConfigName('')
-    setAddingConfig(false)
+  }
+
+  const selectConfig = (config: CourseConfig) => {
+    setSelectedConfig(config)
+    // Reset player scores to par when config changes
+    setPlayerScores((prev) =>
+      prev.map((ps) => ({ ...ps, strokes: config.par ?? ps.strokes }))
+    )
   }
 
   const handleAddConfig = async () => {
     if (!newConfigName.trim() || !selectedCourse) return
     setAddingConfig(true)
     try {
-      const config = await createCourseConfig(selectedCourse.id, newConfigName)
+      const config = await createCourseConfig(selectedCourse.id, newConfigName, Number(newConfigPar) || 54)
       setConfigs((prev) => [...prev, config])
-      setSelectedConfig(config)
+      selectConfig(config)
       setNewConfigName('')
+      setNewConfigPar('54')
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -60,15 +115,14 @@ export default function NewRoundPage() {
   const togglePlayer = (player: Player) => {
     setPlayerScores((prev) => {
       const exists = prev.find((ps) => ps.player.id === player.id)
-      return exists
-        ? prev.filter((ps) => ps.player.id !== player.id)
-        : [...prev, { player, strokes: '' }]
+      if (exists) return prev.filter((ps) => ps.player.id !== player.id)
+      return [...prev, { player, strokes: selectedConfig?.par ?? 54 }]
     })
   }
 
-  const setStrokes = (playerId: string, val: string) =>
+  const setStrokes = (playerId: string, strokes: number) =>
     setPlayerScores((prev) =>
-      prev.map((ps) => ps.player.id === playerId ? { ...ps, strokes: val } : ps)
+      prev.map((ps) => ps.player.id === playerId ? { ...ps, strokes } : ps)
     )
 
   const handleAddPlayer = async () => {
@@ -77,7 +131,7 @@ export default function NewRoundPage() {
     try {
       const player = await createPlayer(newPlayerName)
       setPlayers((prev) => [...prev, player].sort((a, b) => a.name.localeCompare(b.name)))
-      setPlayerScores((prev) => [...prev, { player, strokes: '' }])
+      setPlayerScores((prev) => [...prev, { player, strokes: selectedConfig?.par ?? 54 }])
       setNewPlayerName('')
     } catch (e: any) {
       setError(e.message)
@@ -90,22 +144,15 @@ export default function NewRoundPage() {
     if (!selectedCourse) { setError('Select a course'); return }
     if (!selectedConfig) { setError('Select a configuration'); return }
     if (playerScores.length === 0) { setError('Add at least one player'); return }
-
-    const invalid = playerScores.find((ps) => !ps.strokes || isNaN(Number(ps.strokes)))
-    if (invalid) { setError(`Enter strokes for ${invalid.player.name}`); return }
-
     setSubmitting(true)
     setError('')
     try {
       await createRound(
         selectedConfig.id,
-        playerScores.map((ps) => ({
-          playerId: ps.player.id,
-          strokes: Number(ps.strokes),
-          playerName: ps.player.name,
-        })),
+        playerScores.map((ps) => ({ playerId: ps.player.id, strokes: ps.strokes, playerName: ps.player.name })),
         selectedCourse.name,
-        selectedConfig.name
+        selectedConfig.name,
+        selectedConfig.par
       )
       router.push('/')
     } catch (e: any) {
@@ -115,13 +162,16 @@ export default function NewRoundPage() {
   }
 
   const labelStyle = {
-    display: 'block',
-    fontSize: '0.8rem',
-    textTransform: 'uppercase' as const,
-    letterSpacing: '0.08em',
-    color: 'rgba(240,237,232,0.5)',
-    marginBottom: '0.5rem',
+    display: 'block', fontSize: '0.8rem', textTransform: 'uppercase' as const,
+    letterSpacing: '0.08em', color: 'rgba(240,237,232,0.5)', marginBottom: '0.5rem',
   }
+
+  const optionBtn = (active: boolean) => ({
+    textAlign: 'left' as const, padding: '0.7rem 1rem', borderRadius: '8px', border: '1px solid',
+    borderColor: active ? 'var(--accent)' : 'var(--net)',
+    background: active ? 'rgba(233,69,96,0.12)' : 'rgba(255,255,255,0.02)',
+    color: 'var(--chalk)', cursor: 'pointer', fontSize: '0.95rem', width: '100%',
+  })
 
   return (
     <main className="max-w-xl mx-auto px-4 py-8">
@@ -136,32 +186,15 @@ export default function NewRoundPage() {
         <div>
           <label style={labelStyle}>Course</label>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-            {courses.map((course) => {
-              const active = selectedCourse?.id === course.id
-              return (
-                <button
-                  key={course.id}
-                  type="button"
-                  onClick={() => selectCourse(course)}
-                  style={{
-                    textAlign: 'left',
-                    padding: '0.7rem 1rem',
-                    borderRadius: '8px',
-                    border: '1px solid',
-                    borderColor: active ? 'var(--accent)' : 'var(--net)',
-                    background: active ? 'rgba(233,69,96,0.12)' : 'rgba(255,255,255,0.02)',
-                    color: 'var(--chalk)',
-                    cursor: 'pointer',
-                    fontSize: '0.95rem',
-                  }}
-                >
-                  {course.name}
-                  <span style={{ color: 'rgba(240,237,232,0.4)', fontSize: '0.8rem', marginLeft: '0.5rem' }}>
-                    {course.holes} holes
-                  </span>
-                </button>
-              )
-            })}
+            {courses.map((course) => (
+              <button key={course.id} type="button" onClick={() => selectCourse(course)}
+                style={optionBtn(selectedCourse?.id === course.id)}>
+                {course.name}
+                <span style={{ color: 'rgba(240,237,232,0.4)', fontSize: '0.8rem', marginLeft: '0.5rem' }}>
+                  {course.holes} holes
+                </span>
+              </button>
+            ))}
           </div>
         </div>
 
@@ -170,45 +203,30 @@ export default function NewRoundPage() {
           <div>
             <label style={labelStyle}>Configuration</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.75rem' }}>
-              {configs.map((config) => {
-                const active = selectedConfig?.id === config.id
-                return (
-                  <button
-                    key={config.id}
-                    type="button"
-                    onClick={() => setSelectedConfig(active ? null : config)}
-                    style={{
-                      textAlign: 'left',
-                      padding: '0.7rem 1rem',
-                      borderRadius: '8px',
-                      border: '1px solid',
-                      borderColor: active ? 'var(--accent)' : 'var(--net)',
-                      background: active ? 'rgba(233,69,96,0.12)' : 'rgba(255,255,255,0.02)',
-                      color: 'var(--chalk)',
-                      cursor: 'pointer',
-                      fontSize: '0.95rem',
-                    }}
-                  >
-                    {config.name}
-                  </button>
-                )
-              })}
+              {configs.map((config) => (
+                <button key={config.id} type="button" onClick={() => selectConfig(config)}
+                  style={optionBtn(selectedConfig?.id === config.id)}>
+                  {config.name}
+                  {config.par != null && (
+                    <span style={{ color: 'rgba(240,237,232,0.4)', fontSize: '0.8rem', marginLeft: '0.5rem' }}>
+                      par {config.par}
+                    </span>
+                  )}
+                </button>
+              ))}
             </div>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <input
-                type="text"
-                value={newConfigName}
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <input type="text" value={newConfigName}
                 onChange={(e) => setNewConfigName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddConfig())}
-                placeholder="New config…"
-                style={{ flex: 1 }}
-              />
-              <button
-                type="button"
-                onClick={handleAddConfig}
-                disabled={addingConfig || !newConfigName.trim()}
-                className="btn-ghost"
-              >
+                placeholder="New config…" style={{ flex: 1 }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
+                <span style={{ fontSize: '0.8rem', color: 'rgba(240,237,232,0.4)' }}>Par</span>
+                <input type="text" value={newConfigPar} onChange={(e) => setNewConfigPar(e.target.value)}
+                  style={{ width: '3.5rem', textAlign: 'center' }} />
+              </div>
+              <button type="button" onClick={handleAddConfig}
+                disabled={addingConfig || !newConfigName.trim()} className="btn-ghost">
                 Add
               </button>
             </div>
@@ -220,66 +238,37 @@ export default function NewRoundPage() {
           <div>
             <label style={labelStyle}>Players</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.75rem' }}>
-              {players.map((player) => {
-                const active = playerScores.some((ps) => ps.player.id === player.id)
-                return (
-                  <button
-                    key={player.id}
-                    type="button"
-                    onClick={() => togglePlayer(player)}
-                    style={{
-                      textAlign: 'left',
-                      padding: '0.7rem 1rem',
-                      borderRadius: '8px',
-                      border: '1px solid',
-                      borderColor: active ? 'var(--accent)' : 'var(--net)',
-                      background: active ? 'rgba(233,69,96,0.12)' : 'rgba(255,255,255,0.02)',
-                      color: 'var(--chalk)',
-                      cursor: 'pointer',
-                      fontSize: '0.95rem',
-                    }}
-                  >
-                    {player.name}
-                  </button>
-                )
-              })}
+              {players.map((player) => (
+                <button key={player.id} type="button" onClick={() => togglePlayer(player)}
+                  style={optionBtn(playerScores.some((ps) => ps.player.id === player.id))}>
+                  {player.name}
+                </button>
+              ))}
             </div>
             <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <input
-                type="text"
-                value={newPlayerName}
-                onChange={(e) => setNewPlayerName(e.target.value)}
+              <input type="text" value={newPlayerName} onChange={(e) => setNewPlayerName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddPlayer())}
-                placeholder="New player…"
-                style={{ flex: 1 }}
-              />
-              <button
-                type="button"
-                onClick={handleAddPlayer}
-                disabled={addingPlayer || !newPlayerName.trim()}
-                className="btn-ghost"
-              >
+                placeholder="New player…" style={{ flex: 1 }} />
+              <button type="button" onClick={handleAddPlayer}
+                disabled={addingPlayer || !newPlayerName.trim()} className="btn-ghost">
                 Add
               </button>
             </div>
           </div>
         )}
 
-        {/* Strokes */}
-        {playerScores.length > 0 && (
+        {/* Score steppers */}
+        {playerScores.length > 0 && selectedConfig?.par != null && (
           <div>
-            <label style={labelStyle}>Strokes</label>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <label style={labelStyle}>Scores — par {selectedConfig.par}</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {playerScores.map((ps) => (
-                <div key={ps.player.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  <span style={{ flex: 1, fontSize: '0.95rem' }}>{ps.player.name}</span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={ps.strokes}
-                    onChange={(e) => setStrokes(ps.player.id, e.target.value)}
-                    placeholder="—"
-                    style={{ width: '5rem', textAlign: 'center' }}
+                <div key={ps.player.id} className="card" style={{ padding: '0.875rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontWeight: 500 }}>{ps.player.name}</span>
+                  <ScoreStepper
+                    strokes={ps.strokes}
+                    par={selectedConfig.par!}
+                    onChange={(n) => setStrokes(ps.player.id, Math.max(1, n))}
                   />
                 </div>
               ))}
@@ -290,12 +279,7 @@ export default function NewRoundPage() {
         {error && <p style={{ color: 'var(--accent)' }}>{error}</p>}
 
         {playerScores.length > 0 && selectedConfig && (
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={submitting}
-            className="btn-primary"
-          >
+          <button type="button" onClick={handleSubmit} disabled={submitting} className="btn-primary">
             {submitting ? 'Saving…' : 'Submit Round'}
           </button>
         )}

@@ -29,7 +29,7 @@ export async function createCourse(
   name: string,
   holes: number,
   tagIds: string[],
-  configNames: string[]
+  configs: { name: string; par: number }[]
 ) {
   const { data: course, error } = await supabase
     .from('courses')
@@ -45,10 +45,10 @@ export async function createCourse(
     if (tagError) throw new Error(tagError.message)
   }
 
-  if (configNames.length > 0) {
+  if (configs.length > 0) {
     const { error: configError } = await supabase
       .from('course_configs')
-      .insert(configNames.map((n) => ({ course_id: course.id, name: n.trim() })))
+      .insert(configs.map((c) => ({ course_id: course.id, name: c.name.trim(), par: c.par })))
     if (configError) throw new Error(configError.message)
   }
 
@@ -56,10 +56,10 @@ export async function createCourse(
   return course
 }
 
-export async function createCourseConfig(courseId: string, name: string) {
+export async function createCourseConfig(courseId: string, name: string, par: number) {
   const { data, error } = await supabase
     .from('course_configs')
-    .insert({ course_id: courseId, name: name.trim() })
+    .insert({ course_id: courseId, name: name.trim(), par })
     .select()
     .single()
   if (error) throw new Error(error.message)
@@ -71,7 +71,8 @@ export async function createRound(
   courseConfigId: string,
   scores: { playerId: string; strokes: number; playerName: string }[],
   courseName: string,
-  configName: string
+  configName: string,
+  par: number | null
 ) {
   const { data: round, error: roundError } = await supabase
     .from('rounds')
@@ -89,9 +90,15 @@ export async function createRound(
   )
   if (scoresError) throw new Error(scoresError.message)
 
+  const fmtScore = (strokes: number) => {
+    if (par == null) return `${strokes}`
+    const d = strokes - par
+    return d === 0 ? 'E' : d > 0 ? `+${d}` : `${d}`
+  }
+
   const scoreStr = [...scores]
     .sort((a, b) => a.strokes - b.strokes)
-    .map((s) => `${s.playerName} (${s.strokes})`)
+    .map((s) => `${s.playerName} ${fmtScore(s.strokes)}`)
     .join(', ')
 
   await sendNotification('Frisbee Golf ⛳', `${courseName} — ${configName}: ${scoreStr}`)
