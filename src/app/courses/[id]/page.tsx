@@ -12,13 +12,13 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
 
   const { data: course } = await supabase
     .from('courses')
-    .select('*, established, course_configs(id, name, created_at)')
+    .select('*, course_configs(id, name, created_at, established)')
     .eq('id', id)
     .single()
 
   if (!course) notFound()
 
-  const configs: { id: string; name: string }[] = course.course_configs ?? []
+  const configs: { id: string; name: string; established: boolean }[] = course.course_configs ?? []
   const configIds = configs.map((c) => c.id)
 
   const { data: allScores } = await supabase
@@ -27,11 +27,15 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
     .in('rounds.course_config_id', configIds.length > 0 ? configIds : ['none'])
 
   const scoresByConfig: Record<string, { playerName: string; score: number; playedAt: string; historical: boolean }[]> = {}
+  const playersByConfig: Record<string, Set<string>> = {}
+
   for (const score of allScores ?? []) {
     const round = score.rounds as unknown as { course_config_id: string; played_at: string; historical: boolean } | null
     if (!round) continue
     const cid = round.course_config_id
     if (!scoresByConfig[cid]) scoresByConfig[cid] = []
+    if (!playersByConfig[cid]) playersByConfig[cid] = new Set()
+    playersByConfig[cid].add(score.player_id)
     scoresByConfig[cid].push({
       playerName: (score.players as unknown as { name: string } | null)?.name ?? 'Unknown',
       score: score.strokes,
@@ -63,9 +67,21 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
             const entries = scoresByConfig[config.id] ?? []
             const sorted = [...entries].sort((a, b) => a.score - b.score)
             const best = sorted[0]?.score
+            const uniquePlayers = playersByConfig[config.id]?.size ?? 0
+            const autoEstablished = uniquePlayers >= 3 && entries.length >= 5
+            const isEstablished = config.established || autoEstablished
+
             return (
               <div key={config.id} className="card">
-                <h2 className="font-display text-2xl" style={{ marginBottom: '1rem' }}>{config.name}</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1rem' }}>
+                  <h2 className="font-display text-2xl">{config.name}</h2>
+                  {isEstablished && (
+                    <span style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--gold)', border: '1px solid var(--gold)', borderRadius: '3px', padding: '0.05rem 0.35rem', opacity: 0.85 }}>
+                      Established
+                    </span>
+                  )}
+                </div>
+
                 {sorted.length === 0 ? (
                   <p style={{ color: 'rgba(240,237,232,0.5)', fontSize: '0.9rem' }}>No rounds yet.</p>
                 ) : (
@@ -106,6 +122,10 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
                     </tbody>
                   </table>
                 )}
+
+                {!autoEstablished && (
+                  <EstablishedToggle configId={config.id} courseId={course.id} established={config.established} />
+                )}
               </div>
             )
           })}
@@ -115,8 +135,6 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
       <div style={{ marginTop: '2rem', textAlign: 'center' }}>
         <Link href="/rounds/new" className="btn-primary">+ Enter Round</Link>
       </div>
-
-      <EstablishedToggle courseId={course.id} established={course.established ?? false} />
     </main>
   )
 }

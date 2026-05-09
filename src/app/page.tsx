@@ -7,43 +7,40 @@ export default async function HomePage() {
   const [{ data: players }, { data: scores }, { data: courses }] = await Promise.all([
     supabase.from('players').select('id, name'),
     supabase.from('scores').select('player_id, strokes, rounds(course_config_id)'),
-    supabase.from('courses').select('id, established, course_configs(id)'),
+    supabase.from('courses').select('id, course_configs(id, established)'),
   ])
 
-  // Build configId → courseId map from courses data
-  const configToCourse: Record<string, string> = {}
+  // Build configId → DB established flag
+  const configDbEstablished: Record<string, boolean> = {}
   for (const c of courses ?? []) {
-    for (const cfg of (c.course_configs as { id: string }[]) ?? []) {
-      configToCourse[cfg.id] = c.id
+    for (const cfg of (c.course_configs as { id: string; established: boolean }[]) ?? []) {
+      configDbEstablished[cfg.id] = cfg.established
     }
   }
 
-  // Count unique players and total scores per course (for auto-established logic)
-  const playersByCourse: Record<string, Set<string>> = {}
-  const scoreCountByCourse: Record<string, number> = {}
+  // Count unique players and scores per config (for auto-established)
+  const playersByConfig: Record<string, Set<string>> = {}
+  const scoreCountByConfig: Record<string, number> = {}
   for (const score of scores ?? []) {
     const configId = (score.rounds as unknown as { course_config_id: string } | null)?.course_config_id
     if (!configId) continue
-    const courseId = configToCourse[configId]
-    if (!courseId) continue
-    if (!playersByCourse[courseId]) playersByCourse[courseId] = new Set()
-    playersByCourse[courseId].add(score.player_id)
-    scoreCountByCourse[courseId] = (scoreCountByCourse[courseId] ?? 0) + 1
+    if (!playersByConfig[configId]) playersByConfig[configId] = new Set()
+    playersByConfig[configId].add(score.player_id)
+    scoreCountByConfig[configId] = (scoreCountByConfig[configId] ?? 0) + 1
   }
 
-  const establishedCourseIds = new Set(
-    (courses ?? [])
-      .filter((c) => c.established || ((playersByCourse[c.id]?.size ?? 0) >= 3 && (scoreCountByCourse[c.id] ?? 0) >= 5))
-      .map((c) => c.id)
+  const establishedConfigIds = new Set(
+    Object.keys(configDbEstablished).filter((cfgId) =>
+      configDbEstablished[cfgId] ||
+      ((playersByConfig[cfgId]?.size ?? 0) >= 3 && (scoreCountByConfig[cfgId] ?? 0) >= 5)
+    )
   )
 
-  // Compute fractional record points per player per course config (established courses only)
+  // Compute fractional record points per player — established configs only
   const configScores: Record<string, { playerId: string; strokes: number }[]> = {}
   for (const score of scores ?? []) {
     const configId = (score.rounds as unknown as { course_config_id: string } | null)?.course_config_id
-    if (!configId) continue
-    const courseId = configToCourse[configId]
-    if (!courseId || !establishedCourseIds.has(courseId)) continue
+    if (!configId || !establishedConfigIds.has(configId)) continue
     if (!configScores[configId]) configScores[configId] = []
     configScores[configId].push({ playerId: score.player_id, strokes: score.strokes })
   }

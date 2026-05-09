@@ -45,11 +45,11 @@ export async function createCourseConfig(courseId: string, name: string) {
   return data
 }
 
-export async function toggleEstablished(courseId: string, value: boolean) {
+export async function toggleConfigEstablished(configId: string, courseId: string, value: boolean) {
   const { error } = await supabase
-    .from('courses')
+    .from('course_configs')
     .update({ established: value })
-    .eq('id', courseId)
+    .eq('id', configId)
   if (error) throw new Error(error.message)
   revalidatePath('/courses')
   revalidatePath(`/courses/${courseId}`)

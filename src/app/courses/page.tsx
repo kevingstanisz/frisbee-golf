@@ -11,7 +11,6 @@ type CourseData = {
   holes: number
   configCount: number
   roundCount: number
-  uniquePlayers: number
   established: boolean
   topScores: ScoreEntry[]
 }
@@ -27,7 +26,7 @@ export default function CoursesPage() {
     async function load() {
       const { data: coursesRaw } = await supabase
         .from('courses')
-        .select('id, name, holes, established, course_configs(id, name)')
+        .select('id, name, holes, course_configs(id, name, established)')
         .order('name')
 
       if (!coursesRaw) { setLoading(false); return }
@@ -39,53 +38,69 @@ export default function CoursesPage() {
         .select('player_id, strokes, players(name), rounds(course_config_id)')
         .in('rounds.course_config_id', allConfigIds.length ? allConfigIds : ['none'])
 
-      // Build a map: configId → { courseName, configName }
-      const configMeta: Record<string, { courseId: string; configName: string }> = {}
+      // Build config lookup: configId → { courseId, configName, dbEstablished }
+      const configMeta: Record<string, { courseId: string; configName: string; dbEstablished: boolean }> = {}
       for (const c of coursesRaw as any[]) {
         for (const cfg of c.course_configs) {
-          configMeta[cfg.id] = { courseId: c.id, configName: cfg.name }
+          configMeta[cfg.id] = { courseId: c.id, configName: cfg.name, dbEstablished: cfg.established }
         }
       }
 
-      // Group scores by course
-      const byCourse: Record<string, ScoreEntry[]> = {}
-      const playersByCourse: Record<string, Set<string>> = {}
+      // Group scores by config
+      const byConfig: Record<string, ScoreEntry[]> = {}
+      const playersByConfig: Record<string, Set<string>> = {}
 
       for (const score of scores ?? []) {
         const round = score.rounds as unknown as { course_config_id: string } | null
         if (!round) continue
         const meta = configMeta[round.course_config_id]
         if (!meta) continue
-        const cid = meta.courseId
-        if (!byCourse[cid]) byCourse[cid] = []
-        if (!playersByCourse[cid]) playersByCourse[cid] = new Set()
-        playersByCourse[cid].add(score.player_id)
-        byCourse[cid].push({
+        const cfgId = round.course_config_id
+        if (!byConfig[cfgId]) byConfig[cfgId] = []
+        if (!playersByConfig[cfgId]) playersByConfig[cfgId] = new Set()
+        playersByConfig[cfgId].add(score.player_id)
+        byConfig[cfgId].push({
           playerName: (score.players as unknown as { name: string } | null)?.name ?? 'Unknown',
           score: score.strokes,
           configName: meta.configName,
         })
       }
 
+      // Determine effective established per config
+      const configEstablished: Record<string, boolean> = {}
+      for (const [cfgId, meta] of Object.entries(configMeta)) {
+        const uniquePlayers = playersByConfig[cfgId]?.size ?? 0
+        const totalScores = byConfig[cfgId]?.length ?? 0
+        configEstablished[cfgId] = meta.dbEstablished || (uniquePlayers >= 3 && totalScores >= 5)
+      }
+
       const result: CourseData[] = (coursesRaw as any[]).map((c) => {
-        const entries = byCourse[c.id] ?? []
-        const sorted = [...entries].sort((a, b) => a.score - b.score)
-        const uniquePlayers = playersByCourse[c.id]?.size ?? 0
-        const autoEstablished = uniquePlayers >= 3 && entries.length >= 5
+        const cfgs: any[] = c.course_configs
+        const singleConfig = cfgs.length === 1
+        const totalScores = cfgs.reduce((sum: number, cfg: any) => sum + (byConfig[cfg.id]?.length ?? 0), 0)
+        const anyEstablished = cfgs.some((cfg: any) => configEstablished[cfg.id])
+
+        // Top scores: all if single config, else established configs only
+        const eligibleEntries: ScoreEntry[] = []
+        for (const cfg of cfgs) {
+          if (singleConfig || configEstablished[cfg.id]) {
+            eligibleEntries.push(...(byConfig[cfg.id] ?? []))
+          }
+        }
+        const sorted = [...eligibleEntries].sort((a, b) => a.score - b.score)
+
         return {
           id: c.id,
           name: c.name,
           holes: c.holes,
-          configCount: c.course_configs.length,
-          roundCount: entries.length,
-          uniquePlayers,
-          established: c.established || autoEstablished,
+          configCount: cfgs.length,
+          roundCount: totalScores,
+          established: anyEstablished,
           topScores: sorted.slice(0, 5),
         }
       })
 
       result.sort((a, b) => b.roundCount - a.roundCount)
-
       setCourses(result)
       setLoading(false)
     }
@@ -113,7 +128,6 @@ export default function CoursesPage() {
 
             return (
               <div key={course.id} className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                {/* Header row — click to expand */}
                 <button
                   type="button"
                   onClick={() => setExpanded(isExpanded ? null : course.id)}
@@ -154,11 +168,12 @@ export default function CoursesPage() {
                   </div>
                 </button>
 
-                {/* Expanded panel */}
                 {isExpanded && (
                   <div style={{ borderTop: '1px solid var(--net)', padding: '0.875rem 1.25rem 1rem' }}>
                     {course.topScores.length === 0 ? (
-                      <p style={{ color: 'rgba(240,237,232,0.4)', fontSize: '0.9rem' }}>No rounds yet.</p>
+                      <p style={{ color: 'rgba(240,237,232,0.4)', fontSize: '0.9rem' }}>
+                        {course.configCount > 1 ? 'No established configurations yet.' : 'No rounds yet.'}
+                      </p>
                     ) : (
                       <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '0.875rem' }}>
                         <tbody>
