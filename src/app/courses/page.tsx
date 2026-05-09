@@ -62,21 +62,6 @@ export default function CoursesPage() {
           score: score.strokes,
           configName: meta.configName,
         })
-        // We don't have round_id here, so use a proxy — count score entries grouped by config+score as rounds
-        // Actually fetch round count separately below
-      }
-
-      // Get round counts per course config
-      const { data: rounds } = await supabase
-        .from('rounds')
-        .select('id, course_config_id')
-        .in('course_config_id', allConfigIds.length ? allConfigIds : ['none'])
-
-      const roundCountByCourse: Record<string, number> = {}
-      for (const round of rounds ?? []) {
-        const meta = configMeta[round.course_config_id]
-        if (!meta) continue
-        roundCountByCourse[meta.courseId] = (roundCountByCourse[meta.courseId] ?? 0) + 1
       }
 
       const result: CourseData[] = (coursesRaw as any[]).map((c) => {
@@ -87,7 +72,7 @@ export default function CoursesPage() {
           name: c.name,
           holes: c.holes,
           configCount: c.course_configs.length,
-          roundCount: roundCountByCourse[c.id] ?? 0,
+          roundCount: scores.length,
           topScores: sorted.slice(0, 5),
         }
       })
