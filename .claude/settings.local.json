@@ -17,7 +17,8 @@
       "PowerShell($env:PATH = [System.Environment]::GetEnvironmentVariable\\(\"PATH\", \"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\", \"User\"\\); cd c:\\\\repos\\\\frisbee-golf; cmd /c \"npm run build 2>&1\"; if \\($?\\) { git add -A; git commit -m \"fix: round count = total individual scores per course\"; git push origin main })",
       "PowerShell(cd c:\\\\repos\\\\frisbee-golf; $env:PATH = [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"User\"\\); git add -A; git commit -m \"Established courses, OG badge, sort by rounds\"; git push)",
       "PowerShell(cd c:\\\\repos\\\\frisbee-golf; $env:PATH = [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"User\"\\); git add seed.sql; git commit -m \"seed: add Dave, fix Woodridge Kevin score, update Oaks Zack\"; git push)",
-      "PowerShell(cd c:\\\\repos\\\\frisbee-golf; $env:PATH = [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"User\"\\); git add -A; git commit -m \"Established moves to config level, per-config toggles and leaderboard filtering\"; git push)"
+      "PowerShell(cd c:\\\\repos\\\\frisbee-golf; $env:PATH = [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"User\"\\); git add -A; git commit -m \"Established moves to config level, per-config toggles and leaderboard filtering\"; git push)",
+      "PowerShell(cd c:\\\\repos\\\\frisbee-golf; $env:PATH = [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"User\"\\); git add -A; git commit -m \"Add players list and player detail pages\"; git push)"
     ]
   }
 }

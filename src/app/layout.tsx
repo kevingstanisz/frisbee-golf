@@ -26,6 +26,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Link href="/courses" style={{ fontSize: '0.9rem', color: 'rgba(240,237,232,0.6)', textDecoration: 'none' }}>
             Courses
           </Link>
+          <Link href="/players" style={{ fontSize: '0.9rem', color: 'rgba(240,237,232,0.6)', textDecoration: 'none' }}>
+            Players
+          </Link>
           <Link href="/rounds/new" style={{ marginLeft: 'auto', textDecoration: 'none' }}>
             <span className="btn-primary" style={{ fontSize: '0.9rem', padding: '0.4rem 1rem' }}>+ Round</span>
           </Link>
