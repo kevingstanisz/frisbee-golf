@@ -21,19 +21,40 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           margin: '0 auto',
         }}>
           <Link href="/" className="font-display" style={{ fontSize: '1.25rem', textDecoration: 'none', color: 'var(--chalk)' }}>
-            ⛳ Frisbee Golf
+            Frisbee Golf
           </Link>
-          <Link href="/courses" style={{ fontSize: '0.9rem', color: 'rgba(240,237,232,0.6)', textDecoration: 'none' }}>
+          <span className="top-nav-links" style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flex: 1 }}>
+            <Link href="/courses" style={{ fontSize: '0.9rem', color: 'rgba(240,237,232,0.6)', textDecoration: 'none' }}>
+              Courses
+            </Link>
+            <Link href="/players" style={{ fontSize: '0.9rem', color: 'rgba(240,237,232,0.6)', textDecoration: 'none' }}>
+              Players
+            </Link>
+            <Link href="/rounds/new" style={{ marginLeft: 'auto', textDecoration: 'none' }}>
+              <span className="btn-primary" style={{ fontSize: '0.9rem', padding: '0.4rem 1rem' }}>+ Round</span>
+            </Link>
+          </span>
+        </nav>
+
+        {children}
+
+        <nav className="bottom-nav">
+          <Link href="/" className="bottom-nav-item">
+            <span style={{ fontSize: '1.1rem' }}>★</span>
+            Records
+          </Link>
+          <Link href="/courses" className="bottom-nav-item">
+            <span style={{ fontSize: '1.1rem' }}>◉</span>
             Courses
           </Link>
-          <Link href="/players" style={{ fontSize: '0.9rem', color: 'rgba(240,237,232,0.6)', textDecoration: 'none' }}>
+          <Link href="/players" className="bottom-nav-item">
+            <span style={{ fontSize: '1.1rem' }}>◎</span>
             Players
           </Link>
-          <Link href="/rounds/new" style={{ marginLeft: 'auto', textDecoration: 'none' }}>
-            <span className="btn-primary" style={{ fontSize: '0.9rem', padding: '0.4rem 1rem' }}>+ Round</span>
+          <Link href="/rounds/new" className="bottom-nav-item round-tab">
+            + Round
           </Link>
         </nav>
-        {children}
       </body>
     </html>
   )

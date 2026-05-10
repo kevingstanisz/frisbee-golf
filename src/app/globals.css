@@ -104,6 +104,57 @@ select {
 }
 select option { background: var(--hardwood); }
 
+.bottom-nav {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .top-nav-links {
+    display: none;
+  }
+
+  .bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--hardwood);
+    border-top: 1px solid var(--net);
+    z-index: 50;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  body {
+    padding-bottom: calc(60px + env(safe-area-inset-bottom));
+  }
+}
+
+.bottom-nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 0;
+  min-height: 60px;
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  color: rgba(240,237,232,0.45);
+  text-decoration: none;
+  text-transform: uppercase;
+  gap: 0.2rem;
+}
+
+.bottom-nav-item.round-tab {
+  color: white;
+  background: var(--accent);
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1rem;
+  letter-spacing: 0.06em;
+}
+
 .pulse {
   animation: pulse 2s infinite;
 }
