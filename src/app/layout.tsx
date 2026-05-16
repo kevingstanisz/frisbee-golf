@@ -11,7 +11,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        <nav style={{
+        <nav className="top-nav" style={{
           borderBottom: '1px solid var(--net)',
           padding: '0.75rem 1rem',
           display: 'flex',
@@ -50,6 +50,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Link href="/players" className="bottom-nav-item">
             <span style={{ fontSize: '1.1rem' }}>◎</span>
             Players
+          </Link>
+          <Link href="/rounds" className="bottom-nav-item">
+            <span style={{ fontSize: '1.1rem' }}>☰</span>
+            Rounds
           </Link>
           <Link href="/rounds/new" className="bottom-nav-item round-tab">
             + Round

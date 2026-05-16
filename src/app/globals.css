@@ -109,7 +109,7 @@ select option { background: var(--hardwood); }
 }
 
 @media (max-width: 640px) {
-  .top-nav-links {
+  .top-nav {
     display: none;
   }
 
