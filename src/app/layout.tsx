@@ -14,7 +14,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <nav className="top-nav" style={{
           borderBottom: '1px solid var(--net)',
           padding: '0.75rem 1rem',
-          display: 'flex',
           alignItems: 'center',
           gap: '1.5rem',
           maxWidth: '42rem',

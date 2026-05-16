@@ -104,13 +104,17 @@ select {
 }
 select option { background: var(--hardwood); }
 
+.top-nav {
+  display: flex;
+}
+
 .bottom-nav {
   display: none;
 }
 
 @media (max-width: 640px) {
   .top-nav {
-    display: none;
+    display: none !important;
   }
 
   .bottom-nav {
